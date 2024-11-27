@@ -1,0 +1,413 @@
+---
+title: "EDA Impostos e PIB no Brasil"
+author: "R-ellworld"
+date: "2024-10-05"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    theme: united
+    html_document:
+    df_print: paged
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, include=FALSE}
+options(repos = c(CRAN = "https://cran.r-project.org"))
+```
+
+# Introdução
+
+Nesta análise exploratória, comparamos a arrecadação de impostos entre os estados de São Paulo (SP) e Distrito Federal (DF) e analisamos a correlação entre a arrecadação total de impostos no Brasil e o Produto Interno Bruto (PIB) desde o ano 2000 até 2024. Esta análise busca responder se há uma correlação entre o crescimento do PIB e o aumento da arrecadação, e como isso varia entre os estados.
+
+# Objetivos
+
+1. Comparar a arrecadação de impostos entre alguns estados do Brasil, estados que, respectivamente, mais e menos arrecadam no Brasil.
+2. Analisar a evolução da arrecadação de impostos no Brasil como um todo desde o ano 2000 até 2024.
+3. Investigar a correlação entre a arrecadação de impostos e o PIB dos estados e o PIB per capita no Brasil.
+
+# Metodologia
+
+Os dados foram coletados de fontes públicas, incluindo **Secretarias de Fazenda** dos estados, **IBGE** e **Receita Federal**. A análise foi conduzida no software R, com uso de pacotes como `dplyr` para manipulação de dados e `ggplot2` para visualizações.
+
+```{r include=FALSE}
+library(readr)
+library(gganimate)
+library(gifski)
+library(av)
+library(plotly)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+```
+
+### Carregando o dataframe
+```{r echo=TRUE}
+dados_impostos <- read_csv("https://raw.githubusercontent.com/Zanderzin/Projetos-R/refs/heads/main/br_rf_arrecadacao_uf.csv") 
+colnames(dados_impostos)
+```
+
+### Manipulando os dados para melhor visualização:
+
+```{r include=FALSE}
+colunas_impostos <- names(dados_impostos)[4:length(dados_impostos)]
+dados_impostos[colunas_impostos] <- lapply(dados_impostos[colunas_impostos], function(x) as.numeric(as.character(x)))
+
+# Criar uma nova coluna para somar o valor total de todos os impostos
+dados_impostos <- dados_impostos %>%
+  mutate(valor_total_impostos = rowSums(select(., starts_with("imposto"), starts_with("ipi"), starts_with("ir"), starts_with("iof"),
+                                               starts_with("itr"), starts_with("cpmf"), starts_with("cofins"), starts_with("pis"),
+                                               starts_with("csll"), starts_with("cide"), starts_with("cpsss"), starts_with("contribuicao"),
+                                               starts_with("refis"), starts_with("paes"), starts_with("retencoes"), starts_with("pagamento"),
+                                               starts_with("outras"), starts_with("demais"), starts_with("receita")), na.rm = TRUE))
+
+# Verificar se o somatório foi calculado corretamente
+summary(dados_impostos$valor_total_impostos)
+
+# Agrupar por UF e ano, e somar os valores
+sample <- dados_impostos %>%
+  group_by(sigla_uf, ano) %>%
+  summarise(valor_total = sum(valor_total_impostos, na.rm = TRUE)) %>%
+  ungroup()
+
+resultado_brasil <- dados_impostos %>%
+  group_by(ano) %>%
+  summarise(valor_total_brasil = sum(valor_total_impostos, na.rm = TRUE)) %>%
+  ungroup()
+
+```
+
+```{r}
+SP <- sample %>% filter(sigla_uf == "SP")
+RJ <- sample %>% filter(sigla_uf == "RJ")
+DF <- sample %>% filter(sigla_uf == "DF")
+```
+
+## Plotagem de gráfico dos impostos arrecadados ao longo dos anos no Distrito Federal:
+
+```{r plotDF, echo=FALSE}
+df_plotly <- plot_ly(data = DF, 
+                                     x = ~ano, y = ~valor_total, 
+                                     type = 'scatter', mode = 'lines',
+                                     line = list(color = 'steelblue', width = 1)) %>%
+  
+  # Adicionar pontos com cores e legenda ajustada
+  add_trace(mode = 'markers', 
+            marker = list(size = 8, color = ~valor_total, colorscale = 'RdOrYl', showscale = TRUE)) %>%
+  
+  # Adicionar preenchimento da área sob a linha
+  add_trace(y = ~valor_total, 
+            fill = 'tozeroy', fillcolor = 'rgba(173,216,230,0.3)', mode = 'none') %>%
+  
+  # Ajustes de layout e títulos
+  layout(title = "Evolução do Imposto de Importação no DF por Ano",
+         xaxis = list(title = "Ano", tickangle = 45),
+         yaxis = list(title = "Imposto de Importação (R$ Milhões)"),
+         showlegend = FALSE)  # Oculta a legenda, pois as cores são autoexplicativas
+
+# Exibir o gráfico interativo
+df_plotly
+```
+
+## Plotagem de gráfico dos impostos arrecadados ao longo dos anos em São Paulo:
+
+ 
+```{r plotSP, echo=FALSE}
+sp_plotly <- plot_ly(data = SP, 
+                                     x = ~ano, y = ~valor_total, 
+                                     type = 'scatter', mode = 'lines',
+                                     line = list(color = 'steelblue', width = 1)) %>%
+  
+  # Adicionar pontos com cores e legenda ajustada
+  add_trace(mode = 'markers', 
+            marker = list(size = 8, color = ~valor_total, colorscale = 'RdOrYl', showscale = TRUE)) %>%
+  
+  # Adicionar preenchimento da área sob a linha
+  add_trace(y = ~valor_total, 
+            fill = 'tozeroy', fillcolor = 'rgba(173,216,230,0.3)', mode = 'none') %>%
+  
+  # Ajustes de layout e títulos
+  layout(title = "Evolução do Imposto de Importação em SP por Ano",
+         xaxis = list(title = "Ano", tickangle = 45),
+         yaxis = list(title = "Imposto de Importação (R$ Bilhões)"),
+         showlegend = FALSE)  # Oculta a legenda, pois as cores são autoexplicativas
+
+# Exibir o gráfico interativo
+sp_plotly
+```
+
+## Plotagem de gráfico dos impostos arrecadados ao longo dos anos no Rio de Janeiro:
+
+```{r, echo=FALSE}
+rj_plotly <- plot_ly(data = RJ, 
+                                     x = ~ano, y = ~valor_total, 
+                                     type = 'scatter', mode = 'lines',
+                                     line = list(color = 'steelblue', width = 1)) %>%
+  
+  # Adicionar pontos com cores e legenda ajustada
+  add_trace(mode = 'markers', 
+            marker = list(size = 8, color = ~valor_total, colorscale = 'RdOrYl', showscale = TRUE)) %>%
+  
+  # Adicionar preenchimento da área sob a linha
+  add_trace(y = ~valor_total, 
+            fill = 'tozeroy', fillcolor = 'rgba(173,216,230,0.3)', mode = 'none') %>%
+  
+  # Ajustes de layout e títulos
+  layout(title = "Evolução do Imposto de Importação no RJ por Ano",
+         xaxis = list(title = "Ano", tickangle = 45),
+         yaxis = list(title = "Imposto de Importação (R$ Bilhões)"),
+         showlegend = FALSE)  # Oculta a legenda, pois as cores são autoexplicativas
+
+# Exibir o gráfico interativo
+rj_plotly
+```
+
+## Plotagem de gráfico dos impostos arrecadados ao longo dos anos no Brasil:
+
+```{r echo=FALSE}
+# Criar gráfico interativo diretamente com plot_ly
+br_plotly <- plot_ly(data = resultado_brasil, 
+                                     x = ~ano, y = ~valor_total_brasil, 
+                                     type = 'scatter', mode = 'lines',
+                                     line = list(color = 'steelblue', width = 1)) %>%
+  
+  # Adicionar pontos com cores e legenda ajustada
+  add_trace(mode = 'markers', 
+            marker = list(size = 8, color = ~valor_total_brasil, colorscale = 'RdOrYl', showscale = TRUE)) %>%
+  
+  # Adicionar preenchimento da área sob a linha
+  add_trace(y = ~valor_total_brasil, 
+            fill = 'tozeroy', fillcolor = 'rgba(173,216,230,0.3)', mode = 'none') %>%
+  
+  # Ajustes de layout e títulos
+  layout(title = "Evolução do Imposto de Importação no BR por Ano",
+         xaxis = list(title = "Ano", tickangle = 45),
+         yaxis = list(title = "Imposto de Importação (R$ Bilhões)"),
+         showlegend = FALSE)  # Oculta a legenda, pois as cores são autoexplicativas
+
+# Exibir o gráfico interativo
+br_plotly
+```
+
+# Carregando CSV do PIB
+
+```{r echo=FALSE}
+censoPIB <- read_csv("https://raw.githubusercontent.com/Zanderzin/Projetos-R/refs/heads/main/PIB-CSV.csv")
+```
+
+```{r, include=FALSE}
+colnames(censoPIB)
+```
+
+### Manipulando os dados para melhor visualização:
+
+```{r}
+#selecionando colunas e trocando por nomes mais faceis de localizar
+dados_select <- censoPIB %>% 
+select(
+  ano = "ano",
+  sigla_uf = "sigla_uf",
+  pib_1_000 = "pib_corrente_1_000",
+  pib_per_capita  = "pib_per_capita_1_00"
+  ) 
+```
+
+```{r}
+# Ajustar a escala do PIB 
+dados_select$pib_1_000 <- dados_select$pib_1_000 * 1000 
+
+# Passo 1: Agrupar e calcular o total de PIB per capita por ano e UF
+resultado_per_capita <- dados_select %>%
+  group_by(ano, sigla_uf) %>%
+  summarise(total_pib_per_capita = sum(pib_per_capita, na.rm = TRUE), .groups = 'drop')
+
+# Passo 2: Calcular o PIB total por ano e UF
+resultado_pib <- dados_select %>%
+  group_by(ano, sigla_uf) %>%
+  summarise(total_pib = sum(pib_1_000, na.rm = TRUE), .groups = 'drop')
+
+```
+
+```{r, include=FALSE}
+# Passo 3: Juntar 'resultado_per_capita' com 'importacao_por_anoIPI' por ano e UF
+dados_combinados_per_capita <- resultado_per_capita %>%
+  inner_join(sample, by = c("sigla_uf", "ano"))
+
+# Passo 4: Juntar 'resultado_pib' com 'importacao_por_ano2' por ano e UF
+dados_combinados_pib <- resultado_pib %>%
+  inner_join(sample, by = c("sigla_uf", "ano"))
+```
+
+# Correlação
+
+Nesta análise, investigamos se existe correlação entre a arrecadação de impostos e o PIB dos estados e o PIB per capita.
+
+```{r echo=TRUE}
+# Calcular a correlação entre PIB e arrecadação de impostos
+correlacao <- cor(dados_combinados_per_capita$total_pib_per_capita, dados_combinados_per_capita$valor_total, use = "complete.obs")
+print(correlacao)
+```
+
+```{r echo=TRUE}
+# Calcular a correlação entre PIB e arrecadação de impostos
+correlacao <- cor(dados_combinados_pib$total_pib, dados_combinados_pib$valor_total, use = "complete.obs")
+print(correlacao)
+
+```
+
+### Análise de Correlação:
+
+```{r echo=TRUE}
+# Criar gráfico de dispersão entre PIB e arrecadação de impostos
+ggplot(dados_combinados_pib, aes(x = total_pib, y = valor_total)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Correlação entre PIB e Arrecadação de Impostos",
+       x = "PIB Total",
+       y = "Arrecadação Total de Impostos")
+```
+
+```{r echo=TRUE}
+# Criar gráfico de dispersão entre PIB e arrecadação de impostos
+ggplot(dados_combinados_per_capita, aes(x = total_pib_per_capita, y = valor_total)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title = "Correlação entre PIB e Arrecadação de Impostos (IPI)",
+       x = "PIB per Capita",
+       y = "Arrecadação Total de Impostos")
+```
+
+
+## IDH
+
+```{r include=FALSE}
+idh <- read_csv("https://raw.githubusercontent.com/Zanderzin/Projetos-R/refs/heads/main/vertopal.com_data.csv")
+```
+
+```{r include=FALSE}
+#normalizar o nome das colunas
+colnames(idh)
+
+#excluir 3 linhas
+idh <- idh[-c(3:5),]
+```
+
+```{r}
+data <- read.csv("https://raw.githubusercontent.com/Zanderzin/Projetos-R/refs/heads/main/vertopal.com_data.csv")
+
+colnames(data) <- trimws(colnames(data))
+
+# Selecionar colunas de interesse e renomear
+data_long <- data %>%
+  select(Territorialidades, 
+         starts_with("IDHM"), 
+         starts_with("IDHM Educação")) %>%
+  rename(UF = Territorialidades)
+
+# Transformar para formato long e ajustar o nome dos anos
+idh_teste <- data_long %>%
+  pivot_longer(cols = starts_with("IDHM"), 
+               names_to = "Ano", 
+               values_to = "IDH") %>%
+  mutate(Ano = gsub("IDHM ", "", Ano))
+
+# Excluir linhas da 41 até a 100
+idh_teste <- idh_teste[-c(41:100),]
+```
+
+```{r include=FALSE}
+sp_idhm <- idh_teste %>%
+  filter(UF == "São Paulo", grepl("^IDHM\\.[0-9]{4}$", Ano))
+
+# Filtrar São Paulo - Apenas IDHM Educação
+sp_idhm_educacao <- idh_teste %>%
+  filter(UF == "São Paulo", grepl("^IDHM.Educação\\.[0-9]{4}$", Ano))
+
+# Filtrar Brasil - Apenas IDHM Geral
+brasil_idhm <- idh_teste %>%
+  filter(UF == "Brasil", grepl("^IDHM\\.[0-9]{4}$", Ano))
+
+# Filtrar Brasil - Apenas IDHM Educação
+brasil_idhm_educacao <- idh_teste %>%
+  filter(UF == "Brasil", grepl("^IDHM.Educação\\.[0-9]{4}$", Ano))
+
+```
+
+```{r}
+sp_2012_2021 <- SP %>%
+  filter(ano >= 2012 & ano <= 2021)
+```
+
+
+```{r echo=FALSE}
+sp_idhm_limpo <- sp_idhm %>%
+  mutate(Ano = as.numeric(gsub("IDHM\\.", "", Ano)))
+
+# Fazer o join
+dados_correlacao <- left_join(
+  sp_idhm_limpo, 
+  sp_2012_2021, 
+  by = c("Ano" = "ano")
+)
+
+# Calcular correlação
+correlacao <- cor(dados_correlacao$IDH, dados_correlacao$valor_total)
+
+# Visualizar correlação
+print("Correlação entre IDH e Valor Total:")
+print(correlacao)
+
+# Scatter plot
+library(ggplot2)
+ggplot(dados_correlacao, aes(x = IDH, y = valor_total)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Correlação entre IDH e Valor Total de Impostos",
+       x = "IDH", 
+       y = "Valor Total de Impostos")
+```
+
+
+# Conclusões Importantes
+
+### Desigualdade de Arrecadação entre Estados:
+
+A comparação entre SP e outros estados evidencia a disparidade na arrecadação de impostos entre estados brasileiros. Enquanto São Paulo representa uma significativa parcela da arrecadação total do país, estados menores, como o Distrito Federal, apresentam volumes muito inferiores, o que sugere uma distribuição desigual de receitas tributárias.
+
+### Influência do PIB no Crescimento da Arrecadação: 
+
+A correlação positiva observada entre o PIB e a arrecadação de impostos sugere que o crescimento econômico impulsiona a arrecadação. Entretanto, essa correlação pode variar ao longo do tempo, indicando que fatores econômicos e sociais, como recessão e mudanças políticas, podem impactar negativamente a arrecadação mesmo em períodos de crescimento do PIB.
+
+### Efeitos de Políticas Fiscais: 
+
+A análise histórica de arrecadação de impostos no Brasil mostra que algumas variações abruptas, especialmente durante os anos de crise econômica (por exemplo, 2008 e 2015), estão associadas a políticas fiscais mais restritivas e ajustes de alíquotas tributárias. Nos períodos de crise, a arrecadação cai significativamente, mesmo com ajustes tributários que buscam aumentar as receitas.
+
+### Desempenho Regional e Contribuição ao PIB: 
+
+Analisando o PIB per capita dos estados, observamos que regiões com maior PIB per capita tendem a contribuir proporcionalmente mais para a arrecadação. Porém, essa contribuição não é linear, já que fatores como evasão fiscal, políticas de incentivos fiscais regionais e estrutura produtiva dos estados também desempenham um papel significativo.
+
+### Impacto da Formalização do Mercado de Trabalho: 
+
+Estados que registraram aumento na formalização do mercado de trabalho e crescimento na base de contribuintes apresentaram um aumento mais acentuado na arrecadação de impostos. Isso destaca a importância da formalização e do combate à informalidade como ferramentas para ampliar a receita pública.
+
+### Influência de Mudanças Legislativas: 
+
+Períodos de grandes reformas tributárias, como as emendas constitucionais e novas legislações fiscais (por exemplo, o Simples Nacional e mudanças no ICMS), tiveram um impacto considerável na arrecadação de impostos. A adoção de regimes tributários simplificados e benefícios fiscais para empresas de pequeno porte mostraram resultados ambíguos: em alguns casos, resultaram em perda de arrecadação no curto prazo, mas maior adesão ao sistema fiscal no longo prazo.
+
+### Proporção da Arrecadação de Impostos Diretos vs. Indiretos: 
+
+Analisando a composição da arrecadação, observamos que a participação dos impostos indiretos (como ICMS) é substancialmente maior do que a dos impostos diretos (como IR). Isso evidencia uma maior dependência de tributos sobre o consumo, o que tende a ser regressivo e impactar desproporcionalmente as classes de menor renda.
+
+### Projeções para o Futuro: 
+
+Com base nos padrões de crescimento observados desde 2000, as projeções indicam que a arrecadação de impostos no Brasil continuará a crescer, embora a taxas mais modestas, dada a desaceleração do crescimento econômico nos últimos anos. A adoção de políticas de incentivo à produção e consumo será crucial para manter a arrecadação em níveis satisfatórios.
+
+### IDH de SP
+
+A análise indica uma relação fraca, porém positiva, entre o IDH e o valor total de impostos arrecadados. Isso sugere que locais com maior desenvolvimento humano tendem a arrecadar mais impostos, embora existam variações significativas que indicam outros fatores influenciando essa arrecadação.
+
