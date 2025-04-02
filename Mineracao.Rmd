@@ -1,0 +1,320 @@
+---
+title: "Mineração de Dados"
+author: "Bernardo Alexander"
+date: "2025-03-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Carregar pacotes necessários
+
+```{r}
+install.packages("tidyverse")
+install.packages("tidygeocoder")
+install.packages("sf")
+install.packages("mapview")
+install.packages("plotly")
+install.packages("shiny")
+install.packages("shinydashboard")
+install.packages("leaflet")
+install.packages("viridis")
+install.packages("osmdata")
+
+```
+
+```{r}
+library(tidyverse)
+library(tidygeocoder)
+library(sf)
+library(mapview)
+library(leaflet)
+library(shiny)
+library(shinydashboard)
+library(plotly)
+library(viridis)
+library(osmdata)
+```
+
+```{r}
+dados <- read_csv("https://raw.githubusercontent.com/Zanderzin/Projetos-R/refs/heads/main/SaoPaulo_OnlyAppartments.csv")
+
+#excluir o ID 2746465644 e tambem 2746465737
+dados <- dados %>% filter(ID != 2746465644 & ID != 2746465737)
+```
+
+# 1. Preço médio dos imóveis
+
+```{r}
+preco_medio <- mean(dados$Price, na.rm = TRUE)
+```
+
+# 2. Mediana do preço dos imóveis
+
+```{r}
+preco_mediana <- median(dados$Price, na.rm = TRUE)
+```
+
+# 3. Preço mínimo e máximo dos imóveis
+
+```{r}
+preco_min <- min(dados$Price, na.rm = TRUE)
+preco_max <- max(dados$Price, na.rm = TRUE)
+
+```
+
+# 4. Preço médio por metro quadrado
+
+```{r}
+preco_m2_medio <- mean(dados$Price / dados$Area, na.rm = TRUE)
+```
+
+# 5. Área média dos imóveis
+
+```{r}
+area_media <- mean(dados$Area, na.rm = TRUE)
+```
+
+# 6. Número médio de quartos por imóvel
+
+```{r}
+quartos_medio <- mean(dados$Bedrooms, na.rm = TRUE)
+```
+
+# 7. Número médio de banheiros por imóvel
+
+```{r}
+banheiros_medio <- mean(dados$Bathrooms, na.rm = TRUE)
+```
+
+# 8. Número médio de vagas de estacionamento
+
+```{r}
+vagas_medio <- mean(dados$Parking_Spaces, na.rm = TRUE)
+```
+
+# 9. Percentual de imóveis abaixo do preço de mercado
+
+```{r}
+percentual_below_price <- mean(dados$below_price, na.rm = TRUE) * 100
+```
+
+# 10. Número total de imóveis disponíveis
+
+```{r}
+total_imoveis <- nrow(dados)
+```
+
+# 11. Número de imóveis com pelo menos 3 quartos
+
+```{r}
+imoveis_3_quartos <- sum(dados$Bedrooms >= 3, na.rm = TRUE)
+```
+
+# 12. Número de imóveis com pelo menos 2 vagas de garagem
+
+```{r}
+imoveis_2_vagas <- sum(dados$Parking_Spaces >= 2, na.rm = TRUE)
+```
+
+# 13-15. Preço médio por número de quartos
+
+```{r}
+preco_1_quarto <- mean(dados$Price[dados$Bedrooms == 1], na.rm = TRUE)
+preco_2_quartos <- mean(dados$Price[dados$Bedrooms == 2], na.rm = TRUE)
+preco_3oumais_quartos <- mean(dados$Price[dados$Bedrooms >= 3], na.rm = TRUE)
+```
+
+# 16. Quantidade de imóveis por bairro
+
+```{r}
+imoveis_por_bairro <- dados %>% 
+  group_by(Adress) %>% 
+  summarise(Quantidade = n())
+```
+
+# 17. Quantidade de imóveis cadastrados por ano
+
+```{r}
+dados$created_date <- as.Date(dados$created_date)
+imoveis_por_ano <- dados %>%
+  mutate(ano = year(created_date)) %>%
+  count(ano)
+```
+
+# 18-19. Preço médio e número de imóveis anunciados nos últimos 12 meses
+
+```{r}
+data_limite <- max(as.Date(dados$extract_date)) - years(1)
+ultimo_ano <- dados %>% filter(created_date >= data_limite)
+
+preco_medio_12_meses <- mean(ultimo_ano$Price, na.rm = TRUE)
+num_imoveis_12_meses <- nrow(ultimo_ano)
+```
+
+# 20. Variação percentual do preço médio nos últimos 5 anos
+
+```{r}
+preco_por_ano <- dados %>%
+  mutate(ano = year(created_date)) %>%
+  group_by(ano) %>%
+  summarise(preco_medio = mean(Price, na.rm = TRUE))
+
+if(nrow(preco_por_ano) >= 5) {
+  preco_5anos_atras <- preco_por_ano$preco_medio[nrow(preco_por_ano) - 4]
+  preco_atual <- preco_por_ano$preco_medio[nrow(preco_por_ano)]
+  variacao_5anos <- ((preco_atual - preco_5anos_atras) / preco_5anos_atras) * 100
+} else {
+  variacao_5anos <- NA
+}
+```
+
+# Exibir KPIs
+
+```{r}
+lista_kpis <- list(
+  "Preço médio dos imóveis" = preco_medio,
+  "Mediana do preço dos imóveis" = preco_mediana,
+  "Preço mínimo" = preco_min,
+  "Preço máximo" = preco_max,
+  "Preço médio por m²" = preco_m2_medio,
+  "Área média" = area_media,
+  "Número médio de quartos" = quartos_medio,
+  "Número médio de banheiros" = banheiros_medio,
+  "Número médio de vagas" = vagas_medio,
+  "Percentual abaixo do preço de mercado" = percentual_below_price,
+  "Total de imóveis" = total_imoveis,
+  "Imóveis com 3+ quartos" = imoveis_3_quartos,
+  "Imóveis com 2+ vagas" = imoveis_2_vagas,
+  "Preço médio 1 quarto" = preco_1_quarto,
+  "Preço médio 2 quartos" = preco_2_quartos,
+  "Preço médio 3+ quartos" = preco_3oumais_quartos,
+  "Imóveis por bairro" = imoveis_por_bairro,
+  "Imóveis por ano" = imoveis_por_ano,
+  "Preço médio últimos 12 meses" = preco_medio_12_meses,
+  "Número de imóveis últimos 12 meses" = num_imoveis_12_meses,
+  "Variação de preço em 5 anos" = variacao_5anos
+)
+
+print(lista_kpis)
+```
+
+# Mapa de imóveis
+
+```{r}
+#criar as cordenadas longitude e latitude por meio do Adress
+#pegue 2000 dados aleatorios
+set.seed(123)
+#nao precisa ser pelos mais caros, quero aleatoriedade
+top2000 <- dados %>% sample_n(2000)
+geo_code_dados <- top2000 %>%
+  tidygeocoder::geocode(
+    address = Adress,  # Verifique o nome correto da coluna!
+    method = "osm"
+  )
+
+#excluir linhas com NA em lat e long de geo_code_dados
+geo_code_dados <- geo_code_dados %>% filter(!is.na(lat) & !is.na(long))
+
+dados_sf <- st_as_sf(geo_code_dados, coords = c("long", "lat"), crs = 4326)
+  
+# Criar um fator de cores baseado no preço
+pal <- colorNumeric(palette = magma(10), 
+                    domain = dados_sf$Price, 
+                    na.color = "transparent")
+
+# Criar o mapa com leaflet
+mapa <- leaflet(dados_sf) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    radius = 5,  # Tamanho dos marcadores
+    color = ~pal(Price),  # Cor baseada no preço
+    stroke = FALSE, 
+    fillOpacity = 0.8,
+    popup = ~paste("Preço: R$", Price, "<br>",
+                   "Área: ", Area, "m²", "<br>",
+                   "Quartos: ", Bedrooms, "<br>",
+                   "Banheiros: ", Bathrooms, "<br>",
+                   "Vagas de estacionamento: ", Parking_Spaces, "<br>",
+                   "Bairro: ", Adress, "<br>")) %>%
+  addLegend(
+    position = "bottomright", 
+    pal = pal, 
+    values = dados_sf$Price, 
+    title = "Preço (R$)",
+    opacity = 1
+  ) %>%
+  addLayersControl(
+    overlayGroups = c("Imóveis", "Bairros"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+mapa
+```
+
+```{r}
+dados_sf <- dados_sf %>%
+  mutate(Cluster = case_when(
+    Price <= 500000  ~ "Baixo",
+    Price <= 1500000 ~ "Médio",
+    Price <= 3000000 ~ "Alto",
+    TRUE             ~ "Luxo"
+  ))
+
+mapa <- leaflet(dados_sf) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    data = filter(dados_sf, Cluster == "Baixo"),
+    group = "Baixo",
+    color = "blue",
+    radius = 5,
+    fillOpacity = 0.8,
+    popup = ~paste("Preço: R$", Price)
+  ) %>%
+  addCircleMarkers(
+    data = filter(dados_sf, Cluster == "Médio"),
+    group = "Médio",
+    color = "green",
+    radius = 5,
+    fillOpacity = 0.8,
+    popup = ~paste("Preço: R$", Price)
+  ) %>%
+  addCircleMarkers(
+    data = filter(dados_sf, Cluster == "Alto"),
+    group = "Alto",
+    color = "orange",
+    radius = 5,
+    fillOpacity = 0.8,
+    popup = ~paste("Preço: R$", Price)
+  ) %>%
+  addCircleMarkers(
+    data = filter(dados_sf, Cluster == "Luxo"),
+    group = "Luxo",
+    color = "red",
+    radius = 5,
+    fillOpacity = 0.8,
+    popup = ~paste("Preço: R$", Price)
+  ) %>%
+  addLayersControl(
+    overlayGroups = c("Baixo", "Médio", "Alto", "Luxo"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+mapa
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
