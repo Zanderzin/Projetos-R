@@ -1,0 +1,301 @@
+---
+title: "TXT"
+output: html_document
+date: "2025-01-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(stringr)
+```
+
+```{r}
+df_ctr <- read_excel("C:\\Users\\T1092434\\Downloads\\CTR_xlsx_01.xlsx")
+
+df <- read_excel("C:\\Users\\T1092434\\Downloads\\Pasta 4.xlsx")
+```
+
+# Limpeza de dados
+
+```{r}
+#excluir 7 primeiras colunas e a coluna 11
+df_ctr <- df_ctr[,-c(1:7,11)]
+```
+
+# separar um df de 2020
+
+```{r}
+#filtrar pelo ano 2020 na coluna abertura
+df_ctr_2020 <- df_ctr %>% filter(grepl("2020", ABERTURA))
+```
+
+# criar filtros (regex)
+
+```{r}
+# Definir uma função para extrair informações usando regex
+extract_info_2020 <- function(justification) {
+  # Definir padrões regex com variantes e caracteres especiais
+  cpf_cnpj_pattern <- "CPF/CNPJ: ([\\d\\s]+)|CP F/CNPJ: ([\\d\\s]+)|CP F/CNPJ([\\d\\s]+)|CPF/CNPJ([\\d\\s]+)|CPF /CNPJ([\\d\\s]+)|CPF/CNPJ2 ([\\d\\s]+)|Não Identificados"
+  creditor_name_pattern <- "Identificados? - ([A-Z\\s&':.,ãõÃÕ]+) CPF/CNPJ|I dentificados? - ([A-Z\\s&':.,ãõÃÕ]+) CPF/CNPJ|Identificados? - ([A-Z\\s&':.,ãõÃÕ]+) -|Id entificados? - ([A-Z\\s&':.,ãõÃÕ]+) CPF/CNPJ|I dentificados? - ([A-Z\\s&':.,ãõÃÕ]+) -|Id entificados? - ([A-Z\\s&':.,ãõÃÕ]+) -|Cliente: ([A-Z\\s&':.,ãõÃÕ/-]+) CPF/CNPJ|Cliente: ([A-Z\\s&':.,ãõÃÕ/-]+) CP F/CNPJ|Cliente: ([A-Z\\s&':.,ãõÃÕ/-]+) CPF /CNPJ|Não Identificados"
+  
+  # Extrair informações usando os padrões
+  cpf_cnpj <- str_extract(justification, cpf_cnpj_pattern)
+  creditor_name <- str_extract(justification, creditor_name_pattern)
+  
+  # Remover o prefixo "CPF/CNPJ: ", "CP F/CNPJ: ", "Identificados - ", "I dentificados - ", "Id entificados - ", e "Cliente: " das informações extraídas
+  cpf_cnpj <- str_replace_all(cpf_cnpj, "CPF/CNPJ: |CPF /CNPJ|CPF/CNPJ|CPF/CNPJ2|CP F/CNPJ|CP F/CNPJ: ", "")
+  cpf_cnpj <- str_replace_all(cpf_cnpj, "\\s", "")  # Remover espaços do CPF/CNPJ
+  creditor_name <- str_replace(creditor_name, "Identificados? - |I dentificados? - |Id entificados? - |Cliente: ", "")
+  creditor_name <- str_replace(creditor_name, " CPF/CNPJ.*", "")  # Parar no CPF e não capturar ele junto
+  
+  return(data.frame(Creditor_Name = creditor_name, CPF_CNPJ = cpf_cnpj))
+}
+
+# Aplicar a função à coluna 'JUSTIFICATIVA REGISTRO' e criar novas colunas com as informações extraídas
+extracted_info_2020 <- df_ctr_2020 %>%
+  rowwise() %>%
+  mutate(extracted = list(extract_info_2020(`JUSTIFICATIVA REGISTRO`))) %>%
+  unnest(cols = c(extracted))
+```
+
+# Tratar o ano de 2021
+
+```{r}
+#criar o df de 2021
+df_ctr_2021 <- df_ctr %>% filter(grepl("2021", ABERTURA))
+```
+
+```{r}
+#criar o df de 2022
+df_ctr_2022 <- df_ctr %>% filter(grepl("2022", ABERTURA))
+```
+
+```{r}
+#criar o df de 2023
+df_ctr_2023 <- df_ctr %>% filter(grepl("2023", ABERTURA))
+```
+
+```{r}
+extract_info_2021 <- function(justification) {
+  # Definir padrões regex para capturar NPJ, DMI, ADV, MOTIVO, DOCUMENTO e CREDOR
+  patterns <- list(
+    NPJ = "\\bNPJ\\b\\s*[:\\-]?\\s*([\\d/-]+)|\\bnpj\\b\\s*[:\\-]?\\s*(\\d{4}/\\d{7})|\\bNPJ\\b\\s*[:\\-]?\\s*(\\d{4}/\\d{7})|\\bnpj\\b\\s*[:\\-]?\\s*([\\d\\-\\/]+)|\\bNPJ\\b\\s*[:\\-]?\\s*([\\d\\-\\/]+)|\\bNPJ\\b\\s*[:\\-]?\\s*([\\d\\-\\/]+)|\\bnpj\\b\\s*[:\\-]?\\s*([\\d\\-\\/]+)",
+    DMI = "DMI\\s*[:\\-]?\\s*([\\d/]+)|DMI DE RATEIO\\s*[:\\-]?\\s*([\\d/.]+)|DMI RATEIO:\\s*([\\d/]+)|DMI:\\s*([\\d/]+)|DMI\\s*([\\d/]+)|DMI RATEIO\\s*[:\\-]?\\s*(\\d{4}/\\d{10})|RATEIO\\s*[:\\-]?\\s*([\\d/-]+)|RAT\\s*[.:\\-]?\\s*([\\d/-]+)|rat\\s*[.:\\-]?\\s*([\\d/-]+)|rateio\\s*[:-]?\\s*([\\d/-]+)|MI\\s*[:\\-]?\\s*([\\d/-]+)|CMJ\\s*[:\\-]?\\s*([\\d/-]+)",
+    ADV = "ADV:([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|ADV:([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|ADV:([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|ADV:([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|ADVOGADO:([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)",
+    CREDOR = "CREDOR\\s*[:\\-]?\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©Š/]+)|credor:([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|adv credor\\s*[:\\-]?\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|credor\\s*-\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|credo\\s*[:\\-]?\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|crecor\\s*[:\\-]?\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)",
+    MOTIVO = "MOTIVO\\s*:\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|motivo\\s*:\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|MOTIVO\\s*-\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)|motivo\\s*([A-Z\\sa-z-&',:.íéôóáãõÍÉÔÓÁÃÕ©ŠÚú]+)",
+    DOCUMENTO = "CPF\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|cpf\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|CNPJ\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|cnpj\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|DOC\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|doc\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|DOC\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|cpf\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|CNPJ\\s*[:\\-]?\\s*([\\d\\.\\-\\/]+)|(\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}|\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2})|(\\d{14})"
+  )
+  
+  # Extrair informações usando os padrões
+  extracted_info <- lapply(names(patterns), function(name) {
+    pattern <- patterns[[name]]
+    matches <- str_extract_all(justification, pattern)
+    if (length(matches[[1]]) > 0) {
+      matches <- unlist(matches)
+      if (name == "DMI") {
+        return(paste(unlist(str_replace_all(matches, pattern, "\\1|\\2|\\3|\\4|\\5\\6\\7\\8\\9\\10\\11\\12")), collapse = "; "))
+      } else if (name == "MOTIVO") {
+        return(paste(unlist(str_replace_all(matches, pattern, "\\1|\\2\\3\\4")), collapse = "; "))
+      } else if (name == "DOCUMENTO") {
+        return(paste(unlist(str_replace_all(matches, pattern, "\\1|\\2\\3\\4\\5\\6\\7\\8\\9\\10")), collapse = "; "))
+      } else if (name == "NPJ") {
+        return(paste(unlist(str_replace_all(matches, pattern, "\\1\\2\\3\\4\\5\\6\\7")), collapse = "; "))
+      } else if (name == "CREDOR") {
+        return(paste(unlist(str_replace_all(matches, pattern, "\\1|\\2|\\3|\\4\\5")), collapse = "; "))
+      } else if (name == "ADV") {
+        return(paste(unlist(str_replace_all(matches, pattern, "\\1|\\2|\\3|\\4\\5")), collapse = "; "))
+      } else {
+        return(paste(unlist(str_replace_all(matches, pattern, "\\1")), collapse = "; "))
+      }
+    } else {
+      return(NA)
+    }
+  })
+  
+  names(extracted_info) <- names(patterns)
+  
+  return(data.frame(NPJ = extracted_info$NPJ, DMI = extracted_info$DMI, ADV = extracted_info$ADV, CREDOR = extracted_info$CREDOR, MOTIVO = extracted_info$MOTIVO, DOCUMENTO = extracted_info$DOCUMENTO))
+}
+
+# Aplicar a função à coluna 'JUSTIFICATIVA REGISTRO' e criar novas colunas com as informações extraídas
+extracted_info_ctr_2021 <- df_ctr_2021 %>%
+  rowwise() %>%
+  mutate(extracted = list(extract_info_2021(`JUSTIFICATIVA REGISTRO`))) %>%
+  unnest(cols = c(extracted))
+
+#mesclar coluna ADVOGADO e CREDOR
+extracted_info_ctr_2021$ADV <- ifelse(is.na(extracted_info_ctr_2021$ADV), extracted_info_ctr_2021$CREDOR, extracted_info_ctr_2021$ADV)
+
+
+# Remover a coluna CREDOR
+extracted_info_ctr_2021 <- extracted_info_ctr_2021 %>% select(-CREDOR)
+
+# Remover as palavras "CPF", "CNPJ", "DMI", "NPJ", "cpf", "npj", "cnpj", "-", ":", "/" das colunas "ADV" e "CREDOR"
+extracted_info_ctr_2021 <- extracted_info_ctr_2021 %>%
+  mutate(
+    ADV = str_replace_all(ADV, "(CPF|DOC|CNPJ|DMI|NPJ|cpf|DE RATEIO|npj|cnpj|Nã|o identificado|[|]|[-:/])", ""),
+    NPJ = str_remove_all(NPJ, "[-:/]"),
+    DMI = str_remove_all(DMI, "[|:/]"),
+    DOCUMENTO = str_remove_all(DOCUMENTO, "[|]|[;/]"),
+    MOTIVO = str_remove_all(MOTIVO, "[|]")
+  )
+```
+
+
+
+```{r}
+#conta as quantidades de NA apenas nas colunas CREDOR NPJ e DMI
+extracted_info_ctr_2021 %>% summarise_all(~sum(is.na(.)))
+
+#separa um DF com todos os dados NA de NPJ, DMI, ADVOGADO, MOTIVO e DOCUMENTO
+df_ctr_2021_na <- extracted_info_ctr_2021 %>% filter(is.na(NPJ) | is.na(DMI) | is.na(ADV) | is.na(MOTIVO) | is.na(DOCUMENTO))
+
+colnames(extracted_info_ctr_2021)
+```
+
+
+```{r}
+# Função para gerar o arquivo TXT
+generate_txt <- function(file_path, selected_columns, selected_rows, char_limit) {
+  # Renomear colunas conforme necessário
+  names(extracted_info_ctr_2021)[names(extracted_info_ctr_2021) == "VALOR"] <- "VALOR TOTAL"
+  names(extracted_info_ctr_2021)[names(extracted_info_ctr_2021) == "ADV"] <- "ADVOGADO"
+  names(extracted_info_ctr_2021)[names(extracted_info_ctr_2021) == "DMI"] <- "DMI"
+  extracted_info_ctr_2021$CTR <- as.character(extracted_info_ctr_2021$CTR)
+  extracted_info_ctr_2021 <- extracted_info_ctr_2021 %>% relocate(CTR, .before = MOTIVO)
+  
+  # Selecionar colunas e linhas específicas
+  valid_rows <- as.numeric(selected_rows[selected_rows <= nrow(extracted_info_ctr_2021)])
+  valid_columns <- selected_columns[selected_columns %in% names(extracted_info_ctr_2021)]
+  selected_data <- extracted_info_ctr_2021[valid_rows, valid_columns, drop = FALSE]
+  
+  npj_values <- extracted_info_ctr_2021[selected_rows, "NPJ", drop = TRUE]
+  num <- "000030181"
+  today <- format(Sys.Date(), "%d.%m.%Y")
+  
+  txt_data <- lapply(1:nrow(selected_data), function(i) {
+    row <- selected_data[i, ]
+    npj <- as.character(npj_values[i])
+    if (is.na(npj)) {
+      warning(paste("NPJ não encontrado para a linha", i, ". Por favor, verifique os dados."))
+      return(NULL)
+    }
+    if (any(is.na(row))) {
+      cat(paste("A linha", i, "contém valores NA. Ajuste os valores.\n"))
+      cat("Texto original:\n", paste(paste(names(row), as.character(row), sep = ":"), collapse = " "), "\n")
+      cat("Justificativa Registro:\n", as.character(extracted_info_ctr_2021[i, "JUSTIFICATIVA REGISTRO"]), "\n")
+      row <- sapply(row, function(x) {
+        if (is.na(x)) {
+          readline(prompt = "Digite o valor ajustado: ")
+        } else {
+          x
+        }
+      })
+    }
+    header <- paste0(npj, num, today)
+    row_text <- paste(paste(names(row), as.character(row), sep = ":"), collapse = " ")
+    total_length <- nchar(row_text)  # Contar apenas o texto após o cabeçalho
+    if (total_length > char_limit) {
+      cat(paste("A linha", i, "excede o limite de", char_limit, "caracteres. Ajuste a seleção.\n"))
+      cat("Texto original:\n", row_text, "\n")
+      cat("Justificativa Registro:\n", as.character(extracted_info_ctr_2021[i, "JUSTIFICATIVA REGISTRO"]), "\n")
+      response <- readline(prompt = "Digite o texto ajustado ou 'stop' para parar: ")
+      if (tolower(response) == "stop") {
+        stop("Execução interrompida pelo usuário.")
+      }
+      row_text <- response
+      total_length <- nchar(row_text)
+      if (total_length > char_limit) {
+        warning(paste("A linha ajustada ainda excede o limite de", char_limit, "caracteres. Ignorando a linha."))
+        return(NULL)
+      }
+    }
+    # Preencher com espaços se o total_length for menor que o limite
+    if (total_length < char_limit) {
+      row_text <- paste0(row_text, strrep(" ", char_limit - total_length))
+    }
+    paste0(header, row_text, "0000085532")
+  })
+  
+  # Remover linhas nulas
+  txt_data <- txt_data[!sapply(txt_data, is.null)]
+  
+  txt_content <- paste(txt_data, collapse = "\n")
+  writeLines(txt_content, "dados_selecionados.txt")
+  
+  cat("O arquivo TXT foi gerado com sucesso! Linhas que excederam o limite de caracteres ou continham valores NA foram ajustadas ou ignoradas.\n")
+}
+
+# Exemplo de uso da função
+file_path <- "C:\\Users\\T1092434\\OneDrive - Banco do Brasil S.A\\Documentos\\dados_selecionados.txt"
+selected_columns <- c("VALOR TOTAL", "ADVOGADO", "CNPJ/CPF", "DMI", "MOTIVO", "CTR")
+selected_rows <- 1:1487  # Exemplo de seleção de linhas
+char_limit <- 200
+
+generate_txt(file_path, selected_columns, selected_rows, char_limit)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
